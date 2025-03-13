@@ -17,12 +17,18 @@ func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 		return 2, true, nil
 	}
 
-	// refactor this to use strings.Split like a sane person would
-	strippedHeaderStr := strings.TrimSpace(string(data[:idx]))
-	colIdx := strings.Index(strippedHeaderStr, ":")
-	if colIdx != -1 && strippedHeaderStr[colIdx-1] == ' ' {
-		return 0, false, fmt.Errorf("error: whitespace suffix to field-name found (%s)", strippedHeaderStr)
+	parts := bytes.SplitN(data[:idx], []byte(":"), 2)
+	key := string(parts[0])
+	if key != strings.TrimRight(key, " ") {
+		return 0, false, fmt.Errorf("error: invalid field-name found (%s)", key)
 	}
-	h[strippedHeaderStr[:colIdx]] = strings.TrimSpace(strippedHeaderStr[colIdx+1:])
-	return len(data[:idx+2]), false, nil
+	value := bytes.TrimSpace(parts[1])
+	key = strings.TrimSpace(key)
+	h.Set(key, string(value))
+
+	return idx + 2, false, nil
+}
+
+func (h Headers) Set(key, value string) {
+	h[key] = value
 }
