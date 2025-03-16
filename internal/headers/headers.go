@@ -8,15 +8,20 @@ import (
 
 type Headers map[string]string
 
+// takes a bytestring (request headers) and returns bytes consumed, parsing status and error status
 func (h Headers) Parse(data []byte) (n int, done bool, err error) {
+	// looks if it has enough sent data
 	idx := bytes.Index(data, []byte("\r\n"))
+	// if not, need more
 	if idx == -1 {
 		return 0, false, nil
 	}
+	// look for end of headers, if found: parsing done
 	if idx == 0 {
 		return 2, true, nil
 	}
 
+	// parse the data
 	parts := bytes.SplitN(data[:idx], []byte(":"), 2)
 	key := string(parts[0])
 	if key != strings.TrimRight(key, " ") {
