@@ -78,9 +78,14 @@ func main() {
 			log.Fatal(err)
 		}
 		fmt.Printf(
-			"Request line:\n- Method: %s\n- Target: %s\n- Version: %s",
+			"Request line:\n- Method: %s\n- Target: %s\n- Version: %s\n",
 			req.RequestLine.Method, req.RequestLine.RequestTarget, req.RequestLine.HttpVersion,
 		)
+		fmt.Println("Headers:")
+		for key, value := range req.Headers {
+			fmt.Printf("- %v: %v\n", key, value)
+		}
+		fmt.Printf("Body:\n%s\n", req.Body)
 	}
 
 }

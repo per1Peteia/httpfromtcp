@@ -47,6 +47,13 @@ func (h Headers) Set(key, value string) {
 	h[key] = value
 }
 
+func (h Headers) Get(key string) (string, bool) {
+	if _, exists := h[key]; !exists {
+		return "", false
+	}
+	return h[key], true
+}
+
 // range table to use as valid codepoints for field-names
 var validRunes = &unicode.RangeTable{
 	R16: []unicode.Range16{
