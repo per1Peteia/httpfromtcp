@@ -19,32 +19,21 @@ const (
 )
 
 func WriteStatusLine(w io.Writer, statusCode StatusCode) error {
+	_, err := w.Write(getStatusLine(statusCode))
+	return err
+}
+
+func getStatusLine(statusCode StatusCode) []byte {
+	var reasonPhrase string
 	switch statusCode {
 	case StatusOK:
-		_, err := fmt.Fprint(w, "HTTP/1.1 200 OK\r\n")
-		if err != nil {
-			return err
-		}
-		return nil
+		reasonPhrase = "OK"
 	case StatusBadRequest:
-		_, err := fmt.Fprint(w, "HTTP/1.1 400 Bad Request\r\n")
-		if err != nil {
-			return err
-		}
-		return nil
+		reasonPhrase = "Bad Request"
 	case StatusInternalServerError:
-		_, err := fmt.Fprint(w, "HTTP/1.1 500 Internal Server Error\r\n")
-		if err != nil {
-			return err
-		}
-		return nil
-	default:
-		_, err := fmt.Fprint(w, "HTTP/1.1 \r\n")
-		if err != nil {
-			return err
-		}
+		reasonPhrase = "Internal Server Error"
 	}
-	return nil
+	return []byte(fmt.Sprintf("HTTP/1.1 %d %s\r\n", statusCode, reasonPhrase))
 }
 
 func GetDefaultHeaders(contentLength int) headers.Headers {
