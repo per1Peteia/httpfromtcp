@@ -75,19 +75,17 @@ func (s *Server) listen() {
 func (s *Server) handle(conn net.Conn) {
 	defer conn.Close()
 
-	w := &response.Writer{}
+	w := response.NewWriter(conn)
 	r, err := request.RequestFromReader(conn)
 	if err != nil {
 		handlerErr := NewHandlerErr(response.StatusOK, err.Error())
 		handlerErr.Write(w)
-		conn.Write(w.Response)
 		return
 	}
 
 	// error handling response
 	if handlerErr := s.handler(w, r); handlerErr != nil {
 		handlerErr.Write(w)
-		conn.Write(w.Response)
 		return
 	}
 
@@ -113,6 +111,5 @@ func (s *Server) handle(conn net.Conn) {
 	}
 	w.WriteBody(body)
 
-	conn.Write(w.Response)
 	return
 }

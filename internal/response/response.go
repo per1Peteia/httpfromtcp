@@ -2,6 +2,7 @@ package response
 
 import (
 	"fmt"
+	"io"
 	"strconv"
 
 	"github.com/per1Peteia/httpfromtcp/internal/headers"
@@ -18,16 +19,15 @@ const (
 )
 
 type Writer struct {
-	Response []byte
+	writer io.Writer
 }
 
-func (w *Writer) Write(b []byte) (int, error) {
-	w.Response = append(w.Response, b...)
-	return len(b), nil
+func NewWriter(w io.Writer) *Writer {
+	return &Writer{writer: w}
 }
 
 func (w *Writer) WriteStatusLine(statusCode StatusCode) error {
-	_, err := w.Write(getStatusLine(statusCode))
+	_, err := w.writer.Write(getStatusLine(statusCode))
 	return err
 }
 
@@ -54,12 +54,12 @@ func GetDefaultHeaders(contentLength int) headers.Headers {
 
 func (w *Writer) WriteHeaders(headers headers.Headers) error {
 	for key, value := range headers {
-		_, err := fmt.Fprintf(w, "%s: %s\r\n", key, value)
+		_, err := fmt.Fprintf(w.writer, "%s: %s\r\n", key, value)
 		if err != nil {
 			return err
 		}
 	}
-	_, err := fmt.Fprint(w, "\r\n")
+	_, err := fmt.Fprint(w.writer, "\r\n")
 	if err != nil {
 		return err
 	}
@@ -67,5 +67,5 @@ func (w *Writer) WriteHeaders(headers headers.Headers) error {
 }
 
 func (w *Writer) WriteBody(p []byte) (int, error) {
-	return w.Write(p)
+	return w.writer.Write(p)
 }
