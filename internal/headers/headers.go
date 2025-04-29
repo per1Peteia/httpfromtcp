@@ -47,6 +47,11 @@ func (h Headers) Set(key, value string) {
 	h[key] = value
 }
 
+func (h Headers) Reset(key, value string) {
+	key = strings.ToLower(key)
+	h[key] = value
+}
+
 func (h Headers) Get(key string) (string, bool) {
 	if _, exists := h[key]; !exists {
 		return "", false

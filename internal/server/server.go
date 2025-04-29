@@ -1,9 +1,7 @@
 package server
 
 import (
-	"bytes"
 	"fmt"
-	"io"
 	"log"
 	"net"
 	"sync/atomic"
@@ -17,7 +15,7 @@ type HandlerError struct {
 	ErrMsg     string
 }
 
-type HandlerFunc func(w io.Writer, req *request.Request) *HandlerError
+type HandlerFunc func(w *response.Writer, req *request.Request) *HandlerError
 
 func NewHandlerErr(code response.StatusCode, msg string) *HandlerError {
 	return &HandlerError{
@@ -26,11 +24,13 @@ func NewHandlerErr(code response.StatusCode, msg string) *HandlerError {
 	}
 }
 
-func (he HandlerError) Write(w io.Writer) {
-	response.WriteStatusLine(w, he.StatusCode)
+func (he HandlerError) Write(w *response.Writer) {
+	w.WriteStatusLine(he.StatusCode)
 	msgBytes := []byte(he.ErrMsg)
-	response.WriteHeaders(w, response.GetDefaultHeaders(len(msgBytes)))
-	w.Write(msgBytes)
+	headers := response.GetDefaultHeaders(len(msgBytes))
+	headers.Reset("Content-Type", "text/html")
+	w.WriteHeaders(headers)
+	w.WriteBody(msgBytes)
 }
 
 type Server struct {
@@ -75,30 +75,44 @@ func (s *Server) listen() {
 func (s *Server) handle(conn net.Conn) {
 	defer conn.Close()
 
-	request, err := request.RequestFromReader(conn)
+	w := &response.Writer{}
+	r, err := request.RequestFromReader(conn)
 	if err != nil {
 		handlerErr := NewHandlerErr(response.StatusOK, err.Error())
-		handlerErr.Write(conn)
+		handlerErr.Write(w)
+		conn.Write(w.Response)
 		return
 	}
 
-	buf := &bytes.Buffer{}
-
-	if handlerErr := s.handler(buf, request); handlerErr != nil {
-		handlerErr.Write(conn)
+	// error handling response
+	if handlerErr := s.handler(w, r); handlerErr != nil {
+		handlerErr.Write(w)
+		conn.Write(w.Response)
 		return
 	}
 
-	b := buf.Bytes()
-	err = response.WriteStatusLine(conn, response.StatusOK)
+	// no errors means default response 200 is written to the response.Writer
+	body := []byte(`<html>
+  <head>
+    <title>200 OK</title>
+  </head>
+  <body>
+    <h1>Success!</h1>
+    <p>Your request was an absolute banger.</p>
+  </body>
+</html>`)
+	err = w.WriteStatusLine(response.StatusOK)
 	if err != nil {
 		log.Printf("error writing status line: %v", err)
 	}
-	err = response.WriteHeaders(conn, response.GetDefaultHeaders(len(b)))
+	headers := response.GetDefaultHeaders(len(body))
+	headers.Reset("Content-Type", "text/html")
+	err = w.WriteHeaders(headers)
 	if err != nil {
 		log.Printf("error writing headers: %v", err)
 	}
-	conn.Write(b)
-	return
+	w.WriteBody(body)
 
+	conn.Write(w.Response)
+	return
 }

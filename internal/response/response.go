@@ -2,7 +2,6 @@ package response
 
 import (
 	"fmt"
-	"io"
 	"strconv"
 
 	"github.com/per1Peteia/httpfromtcp/internal/headers"
@@ -18,7 +17,16 @@ const (
 	StatusInternalServerError
 )
 
-func WriteStatusLine(w io.Writer, statusCode StatusCode) error {
+type Writer struct {
+	Response []byte
+}
+
+func (w *Writer) Write(b []byte) (int, error) {
+	w.Response = append(w.Response, b...)
+	return len(b), nil
+}
+
+func (w *Writer) WriteStatusLine(statusCode StatusCode) error {
 	_, err := w.Write(getStatusLine(statusCode))
 	return err
 }
@@ -44,7 +52,7 @@ func GetDefaultHeaders(contentLength int) headers.Headers {
 	return headers
 }
 
-func WriteHeaders(w io.Writer, headers headers.Headers) error {
+func (w *Writer) WriteHeaders(headers headers.Headers) error {
 	for key, value := range headers {
 		_, err := fmt.Fprintf(w, "%s: %s\r\n", key, value)
 		if err != nil {
@@ -56,4 +64,8 @@ func WriteHeaders(w io.Writer, headers headers.Headers) error {
 		return err
 	}
 	return nil
+}
+
+func (w *Writer) WriteBody(p []byte) (int, error) {
+	return w.Write(p)
 }
