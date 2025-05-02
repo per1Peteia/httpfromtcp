@@ -1,9 +1,13 @@
 package main
 
 import (
+	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/per1Peteia/httpfromtcp/internal/request"
@@ -14,32 +18,6 @@ import (
 const port = 42069
 
 func main() {
-	handler := func(w *response.Writer, r *request.Request) *server.HandlerError {
-		if r.RequestLine.RequestTarget == "/yourproblem" {
-			return server.NewHandlerErr(400, `<html>
-  <head>
-    <title>400 Bad Request</title>
-  </head>
-  <body>
-    <h1>Bad Request</h1>
-    <p>Your request honestly kinda sucked.</p>
-  </body>
-</html>`)
-		}
-		if r.RequestLine.RequestTarget == "/myproblem" {
-			return server.NewHandlerErr(500, `<html>
-  <head>
-    <title>500 Internal Server Error</title>
-  </head>
-  <body>
-    <h1>Internal Server Error</h1>
-    <p>Okay, you know what? This one is on me.</p>
-  </body>
-</html>`)
-		}
-		return nil
-	}
-
 	server, err := server.Serve(port, handler)
 	if err != nil {
 		log.Fatalf("Error starting server: %v", err)
@@ -51,4 +29,116 @@ func main() {
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	<-sigChan
 	log.Println(" Server gracefully stopped")
+}
+
+func handler(w *response.Writer, r *request.Request) {
+	if r.RequestLine.RequestTarget == "/yourproblem" {
+		handler400(w, r)
+		return
+	}
+	if r.RequestLine.RequestTarget == "/myproblem" {
+		handler500(w, r)
+		return
+	}
+	if strings.HasPrefix(r.RequestLine.RequestTarget, "/httpbin/") {
+		proxyHandler(w, r)
+		return
+	}
+	handler200(w, r)
+	return
+}
+
+func proxyHandler(w *response.Writer, r *request.Request) {
+	endpoint := strings.TrimPrefix(r.RequestLine.RequestTarget, "/httpbin/")
+	res, err := http.Get(fmt.Sprintf("https://httpbin.org/%s", endpoint))
+	if err != nil {
+		handler500(w, r)
+		return
+	}
+	defer res.Body.Close()
+
+	w.WriteStatusLine(response.StatusOK)
+	h := response.GetDefaultHeaders(0)
+	h.Reset("Transfer-Encoding", "chunked")
+	h.Remove("Content-Length")
+	w.WriteHeaders(h)
+
+	const maxChunkSize = 32
+	buf := make([]byte, maxChunkSize)
+	for {
+		n, err := res.Body.Read(buf)
+		fmt.Println(n, "bytes read")
+		if n > 0 {
+			_, err := w.WriteChunkedBody(buf[:n])
+			if err != nil {
+				fmt.Println("error writing chunked body", err)
+				break
+			}
+		}
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			fmt.Println("error reading response body:", err)
+			break
+		}
+	}
+	// write chunked body done (means writing "0\r\n\r\n")
+	// error handling
+}
+
+func handler400(w *response.Writer, _ *request.Request) {
+	w.WriteStatusLine(response.StatusBadRequest)
+	body := []byte(`<html>
+<head>
+<title>400 Bad Request</title>
+</head>
+<body>
+<h1>Bad Request</h1>
+<p>Your request honestly kinda sucked.</p>
+</body>
+</html>
+`)
+	h := response.GetDefaultHeaders(len(body))
+	h.Reset("Content-Type", "text/html")
+	w.WriteHeaders(h)
+	w.WriteBody(body)
+	return
+}
+
+func handler500(w *response.Writer, _ *request.Request) {
+	w.WriteStatusLine(response.StatusInternalServerError)
+	body := []byte(`<html>
+<head>
+<title>500 Internal Server Error</title>
+</head>
+<body>
+<h1>Internal Server Error</h1>
+<p>Okay, you know what? This one is on me.</p>
+</body>
+</html>
+`)
+	h := response.GetDefaultHeaders(len(body))
+	h.Reset("Content-Type", "text/html")
+	w.WriteHeaders(h)
+	w.WriteBody(body)
+}
+
+func handler200(w *response.Writer, _ *request.Request) {
+	w.WriteStatusLine(response.StatusOK)
+	body := []byte(`<html>
+<head>
+<title>200 OK</title>
+</head>
+<body>
+<h1>Success!</h1>
+<p>Your request was an absolute banger.</p>
+</body>
+</html>
+`)
+	h := response.GetDefaultHeaders(len(body))
+	h.Reset("Content-Type", "text/html")
+	w.WriteHeaders(h)
+	w.WriteBody(body)
+	return
 }

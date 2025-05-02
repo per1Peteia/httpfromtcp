@@ -15,23 +15,7 @@ type HandlerError struct {
 	ErrMsg     string
 }
 
-type HandlerFunc func(w *response.Writer, req *request.Request) *HandlerError
-
-func NewHandlerErr(code response.StatusCode, msg string) *HandlerError {
-	return &HandlerError{
-		StatusCode: code,
-		ErrMsg:     msg,
-	}
-}
-
-func (he HandlerError) Write(w *response.Writer) {
-	w.WriteStatusLine(he.StatusCode)
-	msgBytes := []byte(he.ErrMsg)
-	headers := response.GetDefaultHeaders(len(msgBytes))
-	headers.Reset("Content-Type", "text/html")
-	w.WriteHeaders(headers)
-	w.WriteBody(msgBytes)
-}
+type HandlerFunc func(w *response.Writer, req *request.Request)
 
 type Server struct {
 	listener net.Listener
@@ -78,38 +62,12 @@ func (s *Server) handle(conn net.Conn) {
 	w := response.NewWriter(conn)
 	r, err := request.RequestFromReader(conn)
 	if err != nil {
-		handlerErr := NewHandlerErr(response.StatusOK, err.Error())
-		handlerErr.Write(w)
+		w.WriteStatusLine(response.StatusBadRequest)
+		body := []byte(fmt.Sprintf("Error parsing request: %v", err))
+		w.WriteHeaders(response.GetDefaultHeaders(len(body)))
+		w.WriteBody(body)
 		return
 	}
-
-	// error handling response
-	if handlerErr := s.handler(w, r); handlerErr != nil {
-		handlerErr.Write(w)
-		return
-	}
-
-	// no errors means default response 200 is written to the response.Writer
-	body := []byte(`<html>
-  <head>
-    <title>200 OK</title>
-  </head>
-  <body>
-    <h1>Success!</h1>
-    <p>Your request was an absolute banger.</p>
-  </body>
-</html>`)
-	err = w.WriteStatusLine(response.StatusOK)
-	if err != nil {
-		log.Printf("error writing status line: %v", err)
-	}
-	headers := response.GetDefaultHeaders(len(body))
-	headers.Reset("Content-Type", "text/html")
-	err = w.WriteHeaders(headers)
-	if err != nil {
-		log.Printf("error writing headers: %v", err)
-	}
-	w.WriteBody(body)
-
+	s.handler(w, r)
 	return
 }
