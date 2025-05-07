@@ -69,3 +69,17 @@ func (w *Writer) WriteHeaders(headers headers.Headers) error {
 func (w *Writer) WriteBody(p []byte) (int, error) {
 	return w.writer.Write(p)
 }
+
+func (w *Writer) WriteTrailers(h headers.Headers) error {
+	for key, value := range h {
+		_, err := fmt.Fprintf(w.writer, "%s: %s\r\n", key, value)
+		if err != nil {
+			return err
+		}
+	}
+	_, err := fmt.Fprint(w.writer, "\r\n")
+	if err != nil {
+		return err
+	}
+	return nil
+}
