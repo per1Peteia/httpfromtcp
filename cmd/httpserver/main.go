@@ -46,7 +46,27 @@ func handler(w *response.Writer, r *request.Request) {
 		proxyHandler(w, r)
 		return
 	}
+	if r.RequestLine.RequestTarget == "/video" {
+		videoHandler(w, r)
+		return
+	}
+
 	handler200(w, r)
+	return
+}
+
+func videoHandler(w *response.Writer, r *request.Request) {
+	w.WriteStatusLine(response.StatusOK)
+	file, err := os.ReadFile("assets/vim.mp4")
+	if err != nil {
+		handler500(w, r)
+		return
+	}
+	h := response.GetDefaultHeaders(len(file))
+	h.Reset("Content-Type", "video/mp4")
+
+	w.WriteHeaders(h)
+	w.WriteBody(file)
 	return
 }
 
@@ -111,7 +131,7 @@ func handler400(w *response.Writer, _ *request.Request) {
 </head>
 <body>
 <h1>Bad Request</h1>
-<p>Your request honestly kinda sucked.</p>
+<p	>Your request honestly kinda sucked.</p>
 </body>
 </html>
 `)
@@ -138,6 +158,7 @@ func handler500(w *response.Writer, _ *request.Request) {
 	h.Reset("Content-Type", "text/html")
 	w.WriteHeaders(h)
 	w.WriteBody(body)
+	return
 }
 
 func handler200(w *response.Writer, _ *request.Request) {
